@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block title %}Market Overview - Stock Market Analyzer{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card mb-4">
+            <div class="card-body">
+                <h2><i class="fas fa-globe me-2"></i>Market Overview</h2>
+                <p class="text-muted">Real-time overview of major market indices and trends</p>
+                <button id="refreshMarket" class="btn btn-primary">
+                    <i class="fas fa-sync-alt me-2"></i>Refresh Data
+                </button>
+            </div>
+        </div>
+
+        <div id="loadingMarket" class="loading">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Loading market data...</p>
+        </div>
+
+        <div id="marketResults">
+            <div class="row" id="marketIndices">
+                <!-- Market indices will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadMarketOverview();
+});
+
+document.getElementById('refreshMarket').addEventListener('click', function() {
+    loadMarketOverview();
+});
+
+function loadMarketOverview() {
+    showLoading('loadingMarket');
+    
+    fetch('/api/market-overview')
+        .then(response => response.json())
+        .then(data => {
+            hideLoading('loadingMarket');
+            
+            if (data.error) {
+                alert('Error: ' + data.error);
+                return;
+            }
+            
+            displayMarketOverview(data);
+        })
+        .catch(error => {
+            hideLoading('loadingMarket');
+            alert('Error fetching market data: ' + error.message);
+        });
+}
+
+function displayMarketOverview(data) {
+    const indices = [
+        { symbol: 'SPY', name: 'S&P 500', description: 'Large Cap US Stocks' },
+        { symbol: 'QQQ', name: 'NASDAQ 100', description: 'Technology Heavy Index' },
+        { symbol: 'DIA', name: 'Dow Jones', description: 'Blue Chip Stocks' },
+        { symbol: 'IWM', name: 'Russell 2000', description: 'Small Cap US Stocks' }
+    ];
+    
+    let html = '';
+    
+    indices.forEach(index => {
+        const indexData = data[index.symbol];
+        if (indexData) {
+            const changeClass = indexData.change >= 0 ? 'text-success' : 'text-danger';
+            const signalClass = getSignalClass(indexData.signal);
+            
+            html += `
+                <div class="col-md-6 col-lg-3 mb-4">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <h5 class="card-title">${index.name}</h5>
+                            <p class="text-muted small">${index.description}</p>
+                            <h3 class="mb-0">${formatCurrency(indexData.price)}</h3>
+                            <p class="${changeClass} mb-2">
+                                ${indexData.change >= 0 ? '+' : ''}${formatCurrency(indexData.change)} 
+                                (${formatPercentage(indexData.change_percent)})
+                            </p>
+                            <div class="mt-3">
+                                <span class="badge ${getBadgeClass(indexData.signal)} ${signalClass}">
+                                    ${indexData.signal}
+                                </span>
+                            </div>
+                            <div class="mt-3">
+                                <a href="/analyze?symbol=${index.symbol}" class="btn btn-outline-primary btn-sm">
+                                    Analyze ${index.symbol}
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+    });
+    
+    document.getElementById('marketIndices').innerHTML = html;
+}
+
+function getBadgeClass(signal) {
+    switch(signal?.toLowerCase()) {
+        case 'buy': return 'bg-success';
+        case 'sell': return 'bg-danger';
+        case 'hold': return 'bg-warning';
+        default: return 'bg-secondary';
+    }
+}
+</script>
+{% endblock %}

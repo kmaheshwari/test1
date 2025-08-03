@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+
+{% block title %}Compare Stocks - Stock Market Analyzer{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card mb-4">
+            <div class="card-body">
+                <h2><i class="fas fa-balance-scale me-2"></i>Compare Stocks</h2>
+                <form id="compareForm">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <input type="text" class="form-control form-control-lg" id="symbolsInput" 
+                                   placeholder="Enter stock symbols separated by commas (e.g., AAPL,GOOGL,MSFT,TSLA)">
+                        </div>
+                        <div class="col-md-4">
+                            <button type="submit" class="btn btn-primary btn-lg w-100">
+                                <i class="fas fa-search me-2"></i>Compare Stocks
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div id="loadingCompare" class="loading">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Comparing stocks...</p>
+        </div>
+
+        <div id="compareResults" style="display: none;">
+            <div class="card">
+                <div class="card-header">
+                    <h4><i class="fas fa-chart-bar me-2"></i>Stock Comparison</h4>
+                </div>
+                <div class="card-body">
+                    <div id="comparisonTable"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('compareForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const symbolsInput = document.getElementById('symbolsInput').value.trim();
+    
+    if (!symbolsInput) {
+        alert('Please enter stock symbols');
+        return;
+    }
+    
+    const symbols = symbolsInput.split(',').map(s => s.trim().toUpperCase()).filter(s => s);
+    
+    if (symbols.length < 2) {
+        alert('Please enter at least 2 stock symbols');
+        return;
+    }
+    
+    compareStocks(symbols);
+});
+
+function compareStocks(symbols) {
+    showLoading('loadingCompare');
+    document.getElementById('compareResults').style.display = 'none';
+    
+    const symbolsQuery = symbols.join(',');
+    
+    fetch(`/api/compare?symbols=${symbolsQuery}`)
+        .then(response => response.json())
+        .then(data => {
+            hideLoading('loadingCompare');
+            
+            if (data.error) {
+                alert('Error: ' + data.error);
+                return;
+            }
+            
+            displayComparison(data);
+        })
+        .catch(error => {
+            hideLoading('loadingCompare');
+            alert('Error fetching data: ' + error.message);
+        });
+}
+
+function displayComparison(data) {
+    const symbols = Object.keys(data);
+    
+    let tableHtml = `
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Metric</th>
+                        ${symbols.map(symbol => `<th>${symbol}</th>`).join('')}
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    // Price row
+    tableHtml += '<tr><td><strong>Current Price</strong></td>';
+    symbols.forEach(symbol => {
+        const price = data[symbol]?.basic_data?.current_price;
+        tableHtml += `<td>${price ? formatCurrency(price) : 'N/A'}</td>`;
+    });
+    tableHtml += '</tr>';
+    
+    // Change row
+    tableHtml += '<tr><td><strong>Daily Change %</strong></td>';
+    symbols.forEach(symbol => {
+        const change = data[symbol]?.basic_data?.change_percent;
+        const changeClass = change >= 0 ? 'text-success' : 'text-danger';
+        tableHtml += `<td class="${changeClass}">${change ? formatPercentage(change) : 'N/A'}</td>`;
+    });
+    tableHtml += '</tr>';
+    
+    // Volume Ratio row
+    tableHtml += '<tr><td><strong>Volume Ratio</strong></td>';
+    symbols.forEach(symbol => {
+        const ratio = data[symbol]?.basic_data?.volume_ratio;
+        tableHtml += `<td>${ratio ? ratio.toFixed(2) + 'x' : 'N/A'}</td>`;
+    });
+    tableHtml += '</tr>';
+    
+    // P/E Ratio row
+    tableHtml += '<tr><td><strong>P/E Ratio</strong></td>';
+    symbols.forEach(symbol => {
+        const pe = data[symbol]?.fundamental_analysis?.pe_ratio;
+        tableHtml += `<td>${pe ? pe.toFixed(2) : 'N/A'}</td>`;
+    });
+    tableHtml += '</tr>';
+    
+    // RSI row
+    tableHtml += '<tr><td><strong>RSI</strong></td>';
+    symbols.forEach(symbol => {
+        const rsi = data[symbol]?.technical_analysis?.rsi;
+        const rsiClass = getRSIClass(rsi);
+        tableHtml += `<td class="${rsiClass}">${rsi ? rsi.toFixed(1) : 'N/A'}</td>`;
+    });
+    tableHtml += '</tr>';
+    
+    // Volatility row
+    tableHtml += '<tr><td><strong>Volatility</strong></td>';
+    symbols.forEach(symbol => {
+        const vol = data[symbol]?.risk_analysis?.volatility;
+        const volClass = getVolatilityClass(vol);
+        tableHtml += `<td class="${volClass}">${vol ? vol + '%' : 'N/A'}</td>`;
+    });
+    tableHtml += '</tr>';
+    
+    // Trading Signal row
+    tableHtml += '<tr><td><strong>Trading Signal</strong></td>';
+    symbols.forEach(symbol => {
+        const signal = data[symbol]?.trading_signals?.overall_signal;
+        const signalClass = getSignalClass(signal);
+        tableHtml += `<td class="${signalClass}"><strong>${signal || 'N/A'}</strong></td>`;
+    });
+    tableHtml += '</tr>';
+    
+    tableHtml += '</tbody></table></div>';
+    
+    // Add individual analysis buttons
+    tableHtml += '<div class="mt-3">';
+    symbols.forEach(symbol => {
+        tableHtml += `<a href="/analyze?symbol=${symbol}" class="btn btn-outline-primary me-2 mb-2">Analyze ${symbol}</a>`;
+    });
+    tableHtml += '</div>';
+    
+    document.getElementById('comparisonTable').innerHTML = tableHtml;
+    document.getElementById('compareResults').style.display = 'block';
+}
+
+function getRSIClass(rsi) {
+    if (!rsi) return '';
+    if (rsi < 30) return 'text-success';
+    if (rsi > 70) return 'text-danger';
+    return 'text-primary';
+}
+
+function getVolatilityClass(volatility) {
+    if (!volatility) return '';
+    if (volatility < 20) return 'text-success';
+    if (volatility > 40) return 'text-danger';
+    return 'text-warning';
+}
+</script>
+{% endblock %}
