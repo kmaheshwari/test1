@@ -1,0 +1,405 @@
+{% extends "base.html" %}
+
+{% block title %}Stock Analysis - Stock Market Analyzer{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card mb-4">
+            <div class="card-body">
+                <h2><i class="fas fa-microscope me-2"></i>Comprehensive Stock Analysis</h2>
+                <form id="analysisForm" class="mb-3">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <input type="text" class="form-control form-control-lg" id="symbolInput" 
+                                   placeholder="Enter stock symbol (e.g., AAPL, GOOGL, TSLA)" 
+                                   value="{{ symbol }}">
+                        </div>
+                        <div class="col-md-4">
+                            <button type="submit" class="btn btn-primary btn-lg w-100">
+                                <i class="fas fa-search me-2"></i>Analyze Stock
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div id="loadingAnalysis" class="loading">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Performing comprehensive analysis...</p>
+        </div>
+
+        <div id="analysisResults" style="display: none;">
+            <!-- Basic Information -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h4><i class="fas fa-info-circle me-2"></i>Stock Information</h4>
+                </div>
+                <div class="card-body">
+                    <div id="basicInfo"></div>
+                </div>
+            </div>
+
+            <!-- Technical Analysis -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h4><i class="fas fa-chart-line me-2"></i>Technical Analysis</h4>
+                </div>
+                <div class="card-body">
+                    <div id="technicalAnalysis"></div>
+                </div>
+            </div>
+
+            <!-- Fundamental Analysis -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h4><i class="fas fa-calculator me-2"></i>Fundamental Analysis</h4>
+                </div>
+                <div class="card-body">
+                    <div id="fundamentalAnalysis"></div>
+                </div>
+            </div>
+
+            <!-- Risk Analysis -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h4><i class="fas fa-shield-alt me-2"></i>Risk Analysis</h4>
+                </div>
+                <div class="card-body">
+                    <div id="riskAnalysis"></div>
+                </div>
+            </div>
+
+            <!-- Trading Signals -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h4><i class="fas fa-signal me-2"></i>Trading Signals</h4>
+                </div>
+                <div class="card-body">
+                    <div id="tradingSignals"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('analysisForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const symbol = document.getElementById('symbolInput').value.trim().toUpperCase();
+    
+    if (!symbol) {
+        alert('Please enter a stock symbol');
+        return;
+    }
+    
+    analyzeStock(symbol);
+});
+
+// Check if symbol was provided via URL parameter
+const urlParams = new URLSearchParams(window.location.search);
+const initialSymbol = urlParams.get('symbol');
+if (initialSymbol) {
+    document.getElementById('symbolInput').value = initialSymbol;
+    analyzeStock(initialSymbol);
+}
+
+function analyzeStock(symbol) {
+    showLoading('loadingAnalysis');
+    document.getElementById('analysisResults').style.display = 'none';
+    
+    fetch(`/api/analyze/${symbol}`)
+        .then(response => response.json())
+        .then(data => {
+            hideLoading('loadingAnalysis');
+            
+            if (data.error) {
+                alert('Error: ' + data.error);
+                return;
+            }
+            
+            displayFullAnalysis(data);
+        })
+        .catch(error => {
+            hideLoading('loadingAnalysis');
+            alert('Error fetching data: ' + error.message);
+        });
+}
+
+function displayFullAnalysis(data) {
+    displayBasicInfo(data.basic_data);
+    displayTechnicalAnalysis(data.technical_analysis);
+    displayFundamentalAnalysis(data.fundamental_analysis);
+    displayRiskAnalysis(data.risk_analysis);
+    displayTradingSignals(data.trading_signals);
+    
+    document.getElementById('analysisResults').style.display = 'block';
+}
+
+function displayBasicInfo(basic) {
+    const changeClass = basic.change >= 0 ? 'text-success' : 'text-danger';
+    const marketCapFormatted = basic.market_cap !== 'N/A' ? 
+        formatCurrency(basic.market_cap / 1e9) + 'B' : 'N/A';
+    
+    const html = `
+        <div class="row">
+            <div class="col-md-6">
+                <h3>${basic.symbol}</h3>
+                <h2 class="mb-0">${formatCurrency(basic.current_price)}</h2>
+                <p class="${changeClass} h5 mb-3">
+                    ${basic.change >= 0 ? '+' : ''}${formatCurrency(basic.change)} 
+                    (${formatPercentage(basic.change_percent)})
+                </p>
+            </div>
+            <div class="col-md-6">
+                <div class="row">
+                    <div class="col-6">
+                        <div class="metric-card">
+                            <div class="metric-label">Market Cap</div>
+                            <div class="metric-value">${marketCapFormatted}</div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="metric-card">
+                            <div class="metric-label">Volume</div>
+                            <div class="metric-value">${basic.volume.toLocaleString()}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row mt-3">
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-label">Avg Volume</div>
+                    <div class="metric-value">${basic.avg_volume.toLocaleString()}</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-label">Volume Ratio</div>
+                    <div class="metric-value">${basic.volume_ratio}x</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-label">P/E Ratio</div>
+                    <div class="metric-value">${basic.pe_ratio !== 'N/A' ? basic.pe_ratio.toFixed(2) : 'N/A'}</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-label">Beta</div>
+                    <div class="metric-value">${basic.beta !== 'N/A' ? basic.beta.toFixed(2) : 'N/A'}</div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('basicInfo').innerHTML = html;
+}
+
+function displayTechnicalAnalysis(technical) {
+    const html = `
+        <div class="row">
+            <div class="col-md-4">
+                <div class="metric-card">
+                    <div class="metric-label">RSI (14)</div>
+                    <div class="metric-value ${getRSIClass(technical.rsi)}">${technical.rsi || 'N/A'}</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="metric-card">
+                    <div class="metric-label">MACD</div>
+                    <div class="metric-value">${technical.macd || 'N/A'}</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="metric-card">
+                    <div class="metric-label">MACD Signal</div>
+                    <div class="metric-value">${technical.macd_signal || 'N/A'}</div>
+                </div>
+            </div>
+        </div>
+        <div class="row mt-3">
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-label">SMA 20</div>
+                    <div class="metric-value">${technical.sma_20 ? formatCurrency(technical.sma_20) : 'N/A'}</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-label">SMA 50</div>
+                    <div class="metric-value">${technical.sma_50 ? formatCurrency(technical.sma_50) : 'N/A'}</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-label">Support</div>
+                    <div class="metric-value">${formatCurrency(technical.support)}</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-label">Resistance</div>
+                    <div class="metric-value">${formatCurrency(technical.resistance)}</div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('technicalAnalysis').innerHTML = html;
+}
+
+function displayFundamentalAnalysis(fundamental) {
+    const html = `
+        <div class="row">
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-label">P/E Ratio</div>
+                    <div class="metric-value">${fundamental.pe_ratio || 'N/A'}</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-label">P/B Ratio</div>
+                    <div class="metric-value">${fundamental.price_to_book || 'N/A'}</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-label">Debt/Equity</div>
+                    <div class="metric-value">${fundamental.debt_to_equity || 'N/A'}</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-label">ROE</div>
+                    <div class="metric-value">${fundamental.return_on_equity ? fundamental.return_on_equity + '%' : 'N/A'}</div>
+                </div>
+            </div>
+        </div>
+        <div class="row mt-3">
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-label">ROA</div>
+                    <div class="metric-value">${fundamental.return_on_assets ? fundamental.return_on_assets + '%' : 'N/A'}</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-label">Profit Margin</div>
+                    <div class="metric-value">${fundamental.profit_margin ? fundamental.profit_margin + '%' : 'N/A'}</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-label">Current Ratio</div>
+                    <div class="metric-value">${fundamental.current_ratio || 'N/A'}</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-label">Dividend Yield</div>
+                    <div class="metric-value">${fundamental.dividend_yield ? fundamental.dividend_yield + '%' : 'N/A'}</div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('fundamentalAnalysis').innerHTML = html;
+}
+
+function displayRiskAnalysis(risk) {
+    const html = `
+        <div class="row">
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-label">Volatility</div>
+                    <div class="metric-value ${getVolatilityClass(risk.volatility)}">${risk.volatility}%</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-label">Sharpe Ratio</div>
+                    <div class="metric-value">${risk.sharpe_ratio || 'N/A'}</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-label">Max Drawdown</div>
+                    <div class="metric-value text-danger">${risk.max_drawdown}%</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-label">Beta</div>
+                    <div class="metric-value">${risk.beta || 'N/A'}</div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('riskAnalysis').innerHTML = html;
+}
+
+function displayTradingSignals(signals) {
+    const signalClass = getSignalClass(signals.overall_signal);
+    
+    let technicalSignalsHtml = '';
+    signals.technical_signals.forEach(signal => {
+        technicalSignalsHtml += `<li class="list-group-item">${signal}</li>`;
+    });
+    
+    let fundamentalSignalsHtml = '';
+    signals.fundamental_signals.forEach(signal => {
+        fundamentalSignalsHtml += `<li class="list-group-item">${signal}</li>`;
+    });
+    
+    const html = `
+        <div class="row">
+            <div class="col-md-4">
+                <div class="text-center">
+                    <h3 class="${signalClass} mb-3">${signals.overall_signal}</h3>
+                    <h5>Overall Signal</h5>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <h6>Technical Signals</h6>
+                <ul class="list-group list-group-flush">
+                    ${technicalSignalsHtml || '<li class="list-group-item">No technical signals</li>'}
+                </ul>
+            </div>
+            <div class="col-md-4">
+                <h6>Fundamental Signals</h6>
+                <ul class="list-group list-group-flush">
+                    ${fundamentalSignalsHtml || '<li class="list-group-item">No fundamental signals</li>'}
+                </ul>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('tradingSignals').innerHTML = html;
+}
+
+function getRSIClass(rsi) {
+    if (!rsi) return '';
+    if (rsi < 30) return 'text-success';
+    if (rsi > 70) return 'text-danger';
+    return 'text-primary';
+}
+
+function getVolatilityClass(volatility) {
+    if (!volatility) return '';
+    if (volatility < 20) return 'text-success';
+    if (volatility > 40) return 'text-danger';
+    return 'text-warning';
+}
+</script>
+{% endblock %}
